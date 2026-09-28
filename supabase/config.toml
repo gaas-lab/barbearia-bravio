@@ -1,0 +1,4 @@
+project_id = "barbearia-bravio"
+
+[functions.manage-barber-account]
+verify_jwt = false
