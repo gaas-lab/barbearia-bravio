@@ -1,4 +1,11 @@
 project_id = "barbearia-bravio"
 
+[auth]
+site_url = "https://barbearia-bravio.vercel.app"
+additional_redirect_urls = [
+  "https://barbearia-bravio.vercel.app/**",
+  "http://localhost:5173/**",
+]
+
 [functions.manage-barber-account]
 verify_jwt = false

@@ -12,9 +12,21 @@ const SESSION_STORAGE = 'bravio-master-session-v1';
 const PALETTE = ['#bd8058', '#547c67', '#8b72b5', '#d06d63', '#c5a344', '#54859a'];
 const WEEKDAYS = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
 const DEFAULT_HOURS = WEEKDAYS.map((_, day) => ({ day, isOpen: true, open: '08:00', close: '20:00' }));
+const DEFAULT_SERVICES = [
+  { id: 'preset-service-corte', name: 'Corte', price: 55, duration: 40 },
+  { id: 'preset-service-corte-barba', name: 'Corte e barba', price: 100, duration: 60 },
+  { id: 'preset-service-barba', name: 'Barba', price: 50, duration: 30 },
+  { id: 'preset-service-hidratacao', name: 'Hidratação', price: 45, duration: 30 },
+  { id: 'preset-service-visagismo', name: 'Visagismo', price: 120, duration: 60 },
+];
+function withDefaultServices(services = []) {
+  const current = Array.isArray(services) ? services : [];
+  const names = new Set(current.map(service => service.name.trim().toLocaleLowerCase('pt-BR')));
+  return [...current, ...DEFAULT_SERVICES.filter(service => !names.has(service.name.toLocaleLowerCase('pt-BR')))];
+}
 const initial = {
   barbers: [],
-  services: [],
+  services: DEFAULT_SERVICES,
   appointments: [], withdrawals: [], expenses: [], businessHours: DEFAULT_HOURS, businessBlocks: [], blockRequests: [], shopName: 'Bravio Studio', shopLogo: '', open: true, accent: '#bd8058', dark: false,
 };
 const money = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(n) || 0);
@@ -47,7 +59,7 @@ function readStore() {
     prepareCleanStart();
     const saved = JSON.parse(localStorage.getItem(STORAGE) || '{}');
     const categoryAliases = { Luz: 'Energia elétrica', Internet: 'Internet e telefonia', Materiais: 'Produtos e materiais' };
-    return { ...initial, ...saved, blockRequests: saved.blockRequests || [], expenses: (saved.expenses || []).map(expense => ({ ...expense, category: categoryAliases[expense.category] || expense.category })) };
+    return { ...initial, ...saved, services: withDefaultServices(saved.services ?? initial.services), blockRequests: saved.blockRequests || [], expenses: (saved.expenses || []).map(expense => ({ ...expense, category: categoryAliases[expense.category] || expense.category })) };
   }
   catch { return initial; }
 }
@@ -84,6 +96,8 @@ function App() {
   const [appointmentDefaults, setAppointmentDefaults] = useState({ date: todayKey(), time: '09:00', barberId: '' });
   const [reportMonth, setReportMonth] = useState(currentMonthKey());
   const [editingBarber, setEditingBarber] = useState(null);
+  const [barberInviteRetryId, setBarberInviteRetryId] = useState(null);
+  const [editingService, setEditingService] = useState(null);
   const [calendarActionTab, setCalendarActionTab] = useState('appointment');
   useEffect(() => {
     if(!cloudEnabled)localStorage.setItem(STORAGE, JSON.stringify(data));
@@ -108,7 +122,7 @@ function App() {
     }
     const shop=await getManagerShop(user.id);
     if(!shop){await supabase.auth.signOut();setSession(null);return false;}
-    const workspace=shop.data?.barbers?shop.data:readStore();
+    const workspace=shop.data?.barbers?{...shop.data,services:withDefaultServices(shop.data.services)}:readStore();
     const requests=await fetchBlockRequests(shop.id);
     setData({...initial,...workspace,blockRequests:requests});
     setProfile(p=>({...p,name:user.user_metadata?.name||p.name,email:user.email||''}));
@@ -179,8 +193,15 @@ function App() {
       const savedBarber={id:barberId,name:details.name,role:details.role,color:details.color,photo:details.photo,commission:details.commission,accessEmail:details.accessEmail.trim().toLowerCase()};
       const nextWorkspace={...data,barbers:barber.id?data.barbers.map(item=>item.id===barberId?savedBarber:item):[...data.barbers,savedBarber]};
       await saveManagerWorkspace(session.shopId,nextWorkspace);
-      await saveCloudBarberAccount({shopId:session.shopId,barberId,email:savedBarber.accessEmail,password,invite:!barber.id||!existing?.accessEmail});
       setData(nextWorkspace);
+      setEditingBarber(savedBarber);
+      try {
+        await saveCloudBarberAccount({shopId:session.shopId,barberId,email:savedBarber.accessEmail,password,invite:!barber.id||!existing?.accessEmail});
+        setBarberInviteRetryId(null);
+      } catch (error) {
+        if(!barber.id||!existing?.accessEmail)setBarberInviteRetryId(barberId);
+        throw error;
+      }
       notify(barber.id?'Dados do barbeiro atualizados':'Barbeiro cadastrado e convite enviado por e-mail');
       setEditingBarber(null);setModal('');return;
     }
@@ -199,8 +220,10 @@ function App() {
     setEditingBarber(null); setModal('');
   }
   function saveService(service) {
-    update('services', (list) => [...list, { ...service, id: crypto.randomUUID() }]);
-    setModal(''); notify('Serviço adicionado ao cardápio');
+    if (service.id) update('services', list => list.map(item => item.id === service.id ? service : item));
+    else update('services', (list) => [...list, { ...service, id: crypto.randomUUID() }]);
+    setEditingService(null);
+    setModal(''); notify(service.id ? 'Serviço atualizado' : 'Serviço adicionado ao cardápio');
   }
   function saveWithdrawal(withdrawal) {
     update('withdrawals', (list) => [...(list || []), { ...withdrawal, id: crypto.randomUUID() }]);
@@ -275,28 +298,14 @@ function App() {
     if(cloudEnabled){
       const {data:result,error}=await supabase.auth.signInWithPassword({email:normalizedEmail,password});
       if(error||!result.user)return false;
-      const account=await getBarberAccount(result.user.id);
-      if(!account?.active){await supabase.auth.signOut();return false;}
-      const workspace=await getBarberWorkspace();
-      setData({...initial,...workspace});
-      setProfile(p=>({...p,name:workspace.barbers?.[0]?.name||normalized,email:normalized}));
-      setNeedsPasswordSetup(Boolean(result.user.user_metadata?.invite_pending));
-      setSession({role:'barber',barberId:account.barber_id,shopId:account.shop_id,userId:result.user.id});
-      return true;
-    }
-    if (!auth || normalizedEmail !== auth.email || await passwordDigest(password, auth.salt) !== auth.hash) return false;
-    sessionStorage.setItem(SESSION_STORAGE, 'active'); setSession({role:'master'}); return true;
-  }
-  async function signInBarber(email,password) {
-    const normalized=email.trim().toLowerCase();
-    if(cloudEnabled){
-      const {data:result,error}=await supabase.auth.signInWithPassword({email:normalized,password});
-      if(error||!result.user)return false;
       return restoreCloudSession(result.user);
     }
-    const barber=data.barbers.find(item=>item.access?.email===normalized);
+    if(auth && normalizedEmail===auth.email && await passwordDigest(password,auth.salt)===auth.hash){
+      sessionStorage.setItem(SESSION_STORAGE, 'active'); setSession({role:'master'}); return true;
+    }
+    const barber=data.barbers.find(item=>item.access?.email===normalizedEmail);
     if(!barber||await passwordDigest(password,barber.access.salt)!==barber.access.hash)return false;
-    const next={role:'barber',barberId:barber.id};sessionStorage.setItem(SESSION_STORAGE,JSON.stringify(next));setSession(next);return true;
+    const next={role:'barber',barberId:barber.id};sessionStorage.setItem(SESSION_STORAGE,JSON.stringify(next));setProfile(p=>({...p,name:barber.name,email:normalizedEmail}));setSession(next);return true;
   }
   async function changeMasterPassword(currentPassword, newPassword) {
     if(cloudEnabled){
@@ -317,7 +326,7 @@ function App() {
   const pendingBlockRequests=(data.blockRequests||[]).filter(item=>item.status==='Pendente');
 
   if(cloudEnabled&&!cloudReady)return <main className="login-screen"><section className="login-side"><div className="login-card"><span className="login-icon"><Wifi size={19}/></span><h2>Conectando sua barbearia</h2><p className="login-subtitle">Verificando seu acesso com segurança.</p></div></section></main>;
-  if (!session) return <LoginScreen hasAccount={cloudEnabled||Boolean(auth)} onCreate={createMaster} onLogin={signIn} onLoginBarber={signInBarber} cloudEnabled={cloudEnabled} />;
+  if (!session) return <LoginScreen onCreate={createMaster} onLogin={signIn} cloudEnabled={cloudEnabled} />;
   if(session.role==='barber') {
     if(needsPasswordSetup)return <BarberInviteAcceptance barberName={profile.name} onSave={async password=>{const {error}=await supabase.auth.updateUser({password,data:{invite_pending:false}});if(error)throw error;setNeedsPasswordSetup(false);}}/>;
     const barber=data.barbers.find(item=>item.id===session.barberId);
@@ -338,7 +347,7 @@ function App() {
       <header className="topbar"><button className="mobile-menu icon-btn" onClick={() => setMobileNav(!mobileNav)}><Menu size={19} /></button><div className="breadcrumb">{data.shopName || 'Bravio Studio'} <ChevronRight size={14} /> <b>{view}</b></div><div className="topbar-actions"><span className="today-chip"><CalendarDays size={15} />{prettyToday()}</span><button className="theme-toggle" onClick={() => update('dark', !data.dark)} title={data.dark ? 'Usar tema claro' : 'Usar tema escuro'}>{data.dark ? <Sun size={17} /> : <Moon size={17} />}<span>{data.dark ? 'Modo claro' : 'Modo escuro'}</span></button><button className="top-avatar top-avatar-button" onClick={() => setModal('profile')} title="Abrir perfil do administrador"><ProfileAvatar profile={profile}/></button></div></header>
       <div className="page-content">
         {(view === 'Visão geral' || view === 'Agenda') && <>
-          <section className="page-heading"><div><p className="eyebrow">{view === 'Agenda' ? 'ORGANIZAÇÃO DO DIA' : 'QUARTA-FEIRA · SEU RESUMO'}</p><h1>{view === 'Agenda' ? 'Agenda da barbearia' : 'Bom dia, Gabriel'}<span className="heading-dot">.</span></h1><p className="muted">{view === 'Agenda' ? 'Acompanhe os horários e os atendimentos da equipe.' : 'Tudo certo por aqui. Veja como está o movimento hoje.'}</p></div><div className="heading-actions"><button className="button button-soft" onClick={() => update('open', !data.open)}><span className={`status-dot ${data.open ? 'is-open' : ''}`} />Agenda {data.open ? 'aberta' : 'fechada'} <ChevronDown size={15} /></button><button className="button button-primary" onClick={() => { if(view==='Agenda')openCalendarAction('appointment',agendaDate,'09:00','');else setModal('appointment'); }}><Plus size={17} /> Novo atendimento</button></div></section>
+          <section className="page-heading"><div><p className="eyebrow">{view === 'Agenda' ? 'ORGANIZAÇÃO DO DIA' : 'QUARTA-FEIRA · SEU RESUMO'}</p><h1>{view === 'Agenda' ? 'Agenda da barbearia' : 'Bom dia, Gabriel'}<span className="heading-dot">.</span></h1><p className="muted">{view === 'Agenda' ? 'Acompanhe os horários e os atendimentos da equipe.' : 'Tudo certo por aqui. Veja como está o movimento hoje.'}</p></div><div className="heading-actions">{view === 'Agenda' && <button className="button button-soft" onClick={() => update('open', !data.open)}><span className={`status-dot ${data.open ? 'is-open' : ''}`} />Agenda {data.open ? 'aberta' : 'fechada'} <ChevronDown size={15} /></button>}<button className="button button-primary" onClick={() => { if(view==='Agenda')openCalendarAction('appointment',agendaDate,'09:00','');else setModal('appointment'); }}><Plus size={17} /> Novo atendimento</button></div></section>
           {view==='Visão geral'&&pendingBlockRequests.length>0&&<BlockRequestsPanel requests={pendingBlockRequests} onReview={reviewBlockRequest}/>}
           {view === 'Visão geral' && <section className="stats-grid">
             <Stat icon={CalendarDays} label="Agendamentos hoje" value={String(todayAppointments.length).padStart(2,'0')} change="na agenda de hoje" tone="blue" />
@@ -359,14 +368,14 @@ function App() {
         {view === 'Desempenho' && <BarberDashboard barbers={data.barbers} appointments={data.appointments} withdrawals={data.withdrawals || []} month={reportMonth} setMonth={setReportMonth} onAdd={() => setModal('withdrawal')} onRemove={removeWithdrawal} />}
         {view === 'Financeiro' && <FinanceDashboard appointments={data.appointments} expenses={data.expenses || []} month={reportMonth} setMonth={setReportMonth} onAdd={() => setModal('expense')} onRemove={removeExpense} />}
         {view === 'Minha barbearia' && <BusinessSettings data={data} update={update} onSave={saveBusinessSettings} onAddBlock={() => openBlockModal()} onRemoveBlock={removeBusinessBlock} />}
-        {view === 'Serviços' && <section className="management-view"><div className="page-heading"><div><p className="eyebrow">CARDÁPIO DA CASA</p><h1>Serviços<span className="heading-dot">.</span></h1><p className="muted">Os serviços disponíveis para montar cada atendimento.</p></div><div className="heading-actions"><span className="button button-soft"><Scissors size={16} /> {data.services.length} serviços</span><button className="button button-primary" onClick={() => setModal('service')}><Plus size={17} /> Adicionar serviço</button></div></div><div className="panel services-panel"><div className="service-heading"><span>Serviço</span><span>Duração</span><span>Valor</span></div>{data.services.map(s => <div className="service-row" key={s.id}><span className="service-name"><i><Scissors size={15} /></i><b>{s.name}</b></span><span className="service-duration"><Clock3 size={14} />{s.duration} min</span><strong>{money(s.price)}</strong></div>)}</div></section>}
+        {view === 'Serviços' && <section className="management-view"><div className="page-heading"><div><p className="eyebrow">CARDÁPIO DA CASA</p><h1>Serviços<span className="heading-dot">.</span></h1><p className="muted">Os serviços disponíveis para montar cada atendimento. Toque em um serviço para editar preço e duração.</p></div><div className="heading-actions"><span className="button button-soft"><Scissors size={16} /> {data.services.length} serviços</span><button className="button button-primary" onClick={() => { setEditingService(null); setModal('service'); }}><Plus size={17} /> Adicionar serviço</button></div></div><div className="panel services-panel"><div className="service-heading"><span>Serviço</span><span>Duração</span><span>Valor</span></div>{data.services.map(s => <div className="service-row" key={s.id}><button className="service-name service-edit" onClick={() => { setEditingService(s); setModal('service'); }} aria-label={`Editar ${s.name}`}><i><Scissors size={15} /></i><b>{s.name}</b></button><span className="service-duration"><Clock3 size={14} />{s.duration} min</span><strong>{money(s.price)}</strong></div>)}</div></section>}
       </div>
       <footer className="app-footer"><span>BRAVIO STUDIO <i>•</i> GESTÃO DA BARBEARIA</span><span>Feito para cuidar de cada detalhe.</span></footer>
     </main>
     {modal === 'calendar-action' && <CalendarActionModal key={`${appointmentDefaults.date}-${appointmentDefaults.time}-${appointmentDefaults.barberId}`} data={data} defaults={appointmentDefaults} defaultTab={calendarActionTab} businessHours={data.businessHours||DEFAULT_HOURS} blocks={data.businessBlocks||[]} agendaOpen={data.open} barbers={data.barbers} onClose={()=>setModal('')} onSaveAppointment={saveAppointment} onSaveBlock={saveBusinessBlock} />}
     {modal === 'appointment' && <AppointmentModal key={`${appointmentDefaults.date}-${appointmentDefaults.time}-${appointmentDefaults.barberId}`} data={data} defaults={appointmentDefaults} businessHours={data.businessHours || DEFAULT_HOURS} blocks={data.businessBlocks || []} agendaOpen={data.open} onSwitchTab={() => setModal('block')} onClose={() => setModal('')} onSave={saveAppointment} />}
-    {modal === 'barber' && <BarberModal barber={editingBarber} barbers={data.barbers} cloudEnabled={cloudEnabled} onClose={() => { setEditingBarber(null); setModal(''); }} onSave={saveBarber} />}
-    {modal === 'service' && <ServiceModal onClose={() => setModal('')} onSave={saveService} />}
+    {modal === 'barber' && <BarberModal barber={editingBarber} inviteRetry={barberInviteRetryId===editingBarber?.id} barbers={data.barbers} cloudEnabled={cloudEnabled} onClose={() => { setEditingBarber(null); setModal(''); }} onSave={saveBarber} />}
+    {modal === 'service' && <ServiceModal service={editingService} onClose={() => { setEditingService(null); setModal(''); }} onSave={saveService} />}
     {modal === 'withdrawal' && <WithdrawalModal barbers={data.barbers} onClose={() => setModal('')} onSave={saveWithdrawal} />}
     {modal === 'expense' && <ExpenseModal onClose={() => setModal('')} onSave={saveExpense} />}
     {modal === 'block' && <BlockModal key={`${appointmentDefaults.date}-${appointmentDefaults.time}-${appointmentDefaults.barberId}`} barbers={data.barbers} businessHours={data.businessHours || DEFAULT_HOURS} defaults={appointmentDefaults} onSwitchTab={() => setModal('appointment')} onClose={() => setModal('')} onSave={saveBusinessBlock} />}
@@ -384,25 +393,71 @@ function BarberInviteAcceptance({ barberName, onSave }) {
   return <main className="login-screen"><section className="login-story"><a className="login-brand" href="#bravio"><span className="brand-symbol"><Scissors size={19}/></span><span>bravio<small>BARBERSHOP</small></span></a><div className="story-content"><span className="story-kicker"><i/> CONVITE DA EQUIPE</span><h1>Seu acesso.<br/>Sua agenda em <em>ordem.</em></h1><p>Crie uma senha para entrar no seu espaço individual da barbearia.</p></div><div className="login-story-foot"><span>ACESSO INDIVIDUAL</span><span>BRAVIO STUDIO</span></div></section><section className="login-side"><div className="login-card"><span className="login-icon"><LockKeyhole size={19}/></span><p className="eyebrow">CONVITE DO GERENTE</p><h2>Bem-vindo{barberName?`, ${barberName}`:''}</h2><p className="login-subtitle">Defina sua senha pessoal para aceitar o convite e acessar sua agenda.</p><form className="login-form" onSubmit={submit}><label>Nova senha<input type="password" autoComplete="new-password" value={password} onChange={event=>setPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" required/></label><label>Confirmar senha<input type="password" autoComplete="new-password" value={confirm} onChange={event=>setConfirm(event.target.value)} placeholder="Digite a senha novamente" required/></label>{error&&<p className="login-error">{error}</p>}<button className="login-submit" disabled={loading}>{loading?'Salvando…':'Criar senha e continuar'}<ArrowRight size={16}/></button></form><p className="local-auth-note">Depois, entre usando seu e-mail e a senha criada aqui.</p></div></section></main>;
 }
 
-function LoginScreen({ hasAccount, onCreate, onLogin, onLoginBarber, cloudEnabled=false }) {
-  const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [confirm, setConfirm] = useState(''); const [visible, setVisible] = useState(false); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [mode,setMode]=useState(()=>cloudEnabled?'create':hasAccount?'master':'create');
-  async function submit(e) {
-    e.preventDefault(); setError('');
-    const creating=mode==='create'||!hasAccount;
-    if (creating && password.length < 8) return setError('Crie uma senha com pelo menos 8 caracteres.');
-    if (creating && password !== confirm) return setError('As senhas não coincidem.');
+function LoginScreen({ onCreate, onLogin, cloudEnabled=false }) {
+  const [signup, setSignup] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [visible, setVisible] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+    if (signup && password.length < 8) return setError('Crie uma senha com pelo menos 8 caracteres.');
+    if (signup && password !== confirm) return setError('As senhas não coincidem.');
     setLoading(true);
     try {
-      if (mode==='barber') { const ok=await onLoginBarber(email,password);if(!ok)setError('E-mail ou senha de barbeiro incorretos.'); }
-      else if (creating) {const created=await onCreate({ name, email, password });if(created===false)setError(cloudEnabled?'A conta foi criada. Confirme o e-mail e depois entre como gerente.':'Não foi possível criar o acesso. Tente novamente.');}
-      else { const ok = await onLogin(email, password); if (!ok) setError('E-mail ou senha incorretos.'); }
-    } catch (reason) { setError(cloudEnabled?(reason?.message||'Falha ao conectar ao Supabase. Confira as configurações.'):'Não foi possível validar o acesso neste navegador. Tente novamente.'); }
-    finally { setLoading(false); }
+      if (signup) {
+        const created = await onCreate({ name, email, password });
+        if (created === false) setError(cloudEnabled ? 'Conta criada. Confirme seu e-mail e depois entre.' : 'Não foi possível criar sua conta. Tente novamente.');
+      } else {
+        const signedIn = await onLogin(email, password);
+        if (!signedIn) setError('E-mail ou senha incorretos.');
+      }
+    } catch (reason) {
+      setError(cloudEnabled ? (reason?.message || 'Falha ao conectar ao Supabase. Confira as configurações.') : 'Não foi possível validar seus dados. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   }
-  const creating=mode==='create'||!hasAccount;
-  return <main className="login-screen"><section className="login-story"><a className="login-brand" href="#bravio"><span className="brand-symbol"><Scissors size={19}/></span><span>bravio<small>BARBERSHOP</small></span></a><div className="story-content"><span className="story-kicker"><i/> GESTÃO COM ESTILO</span><h1>Seu espaço.<br/>Seu jeito de <em>cuidar.</em></h1><p>Uma experiência feita para quem transforma um bom corte em um momento especial.</p><div className="story-card"><div className="story-card-top"><span className="story-card-mark"><Scissors size={14}/></span><span><b>BRAVIO STUDIO</b><small>PAINEL DA BARBEARIA</small></span><span className="story-live"><i/> SEU ESPAÇO</span></div><div className="story-card-bottom"><span><small>AGENDA</small><b>Seu dia, no ritmo certo</b></span><span className="story-mini-bars"><i/><i/><i/><i/><i/></span></div></div></div><div className="login-story-foot"><span>ESTILO EM CADA DETALHE</span><span>BRASÍLIA · DF</span></div></section><section className="login-side"><div className="login-mobile-brand"><a className="login-brand" href="#bravio"><span className="brand-symbol"><Scissors size={19}/></span><span>bravio<small>BARBERSHOP</small></span></a></div><div className="login-card"><span className="login-icon"><ShieldCheck size={19}/></span><p className="eyebrow">{creating?'SEU PRIMEIRO ACESSO':mode==='barber'?'ACESSO DO BARBEIRO':'ACESSO ADMINISTRATIVO'}</p><h2>{creating?'Vamos preparar seu espaço':mode==='barber'?'Acesse sua agenda':'Boas-vindas de volta'}</h2><p className="login-subtitle">{creating?'Crie o acesso do administrador master da barbearia.':mode==='barber'?'Use o e-mail do convite e a senha que você criou ao aceitá-lo.':'Entre com seu acesso master para continuar.'}</p>{(hasAccount||cloudEnabled)&&<div className="login-role-tabs"><button type="button" className={mode==='master'?'active':''} onClick={()=>{setMode('master');setError('');}}>Gerente</button><button type="button" className={mode==='barber'?'active':''} onClick={()=>{setMode('barber');setError('');}}>Barbeiro</button>{cloudEnabled&&<button type="button" className={mode==='create'?'active':''} onClick={()=>{setMode('create');setError('');}}>Criar gerente</button>}</div>}<form onSubmit={submit} className="login-form">{creating&&<label>Seu nome<input autoComplete="name" placeholder="Como podemos te chamar?" value={name} onChange={e=>setName(e.target.value)} required/></label>}<label>E-mail<input autoFocus type="email" autoComplete="username" placeholder="voce@barbearia.com" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Senha<span className="password-input"><input type={visible?'text':'password'} autoComplete={creating?'new-password':'current-password'} placeholder={creating?'Mínimo de 8 caracteres':'Digite sua senha'} value={password} onChange={e=>setPassword(e.target.value)} required/><button type="button" onClick={()=>setVisible(v=>!v)}>{visible?'Ocultar':'Mostrar'}</button></span></label>{creating&&<label>Confirmar senha<input type={visible?'text':'password'} autoComplete="new-password" placeholder="Digite a senha novamente" value={confirm} onChange={e=>setConfirm(e.target.value)} required/></label>}{error&&<p className="login-error">{error}</p>}<button className="login-submit" disabled={loading}>{loading?'Aguarde…':creating?'Criar acesso master':mode==='barber'?'Entrar como barbeiro':'Entrar no painel'}<ArrowRight size={16}/></button></form><div className="login-security"><ShieldCheck size={15}/><span><b>{mode==='barber'?'Acesso individual':'Acesso master'}</b><small>{mode==='barber'?'A agenda e os valores do seu perfil.':'O perfil administrativo controla este espaço.'}</small></span></div><p className="local-auth-note">{cloudEnabled?'Acesso protegido pelo Supabase e sincronizado entre dispositivos.':'Acesso salvo apenas neste navegador. Configure Supabase para sincronizar.'}</p></div><div className="login-side-foot">© {new Date().getFullYear()} BRAVIO STUDIO <span>•</span> FEITO PARA CUIDAR DE CADA DETALHE</div></section></main>;
-}
 
+  function switchMode(nextSignup) {
+    setSignup(nextSignup);
+    setError('');
+  }
+
+  return <main className="login-screen">
+    <section className="login-story">
+      <a className="login-brand" href="#bravio"><span className="brand-symbol"><Scissors size={19}/></span><span>bravio<small>BARBERSHOP</small></span></a>
+      <div className="story-content"><span className="story-kicker"><i/> GESTÃO COM ESTILO</span><h1>Seu espaço.<br/>Seu jeito de <em>cuidar.</em></h1><p>Uma experiência feita para quem transforma um bom corte em um momento especial.</p><div className="story-card"><div className="story-card-top"><span className="story-card-mark"><Scissors size={14}/></span><span><b>BRAVIO STUDIO</b><small>PAINEL DA BARBEARIA</small></span><span className="story-live"><i/> SEU ESPAÇO</span></div><div className="story-card-bottom"><span><small>AGENDA</small><b>Seu dia, no ritmo certo</b></span><span className="story-mini-bars"><i/><i/><i/><i/><i/></span></div></div></div>
+      <div className="login-story-foot"><span>ESTILO EM CADA DETALHE</span><span>BRASÍLIA · DF</span></div>
+    </section>
+    <section className="login-side">
+      <div className="login-mobile-brand"><a className="login-brand" href="#bravio"><span className="brand-symbol"><Scissors size={19}/></span><span>bravio<small>BARBERSHOP</small></span></a></div>
+      <div className="login-card">
+        <span className="login-icon"><ShieldCheck size={19}/></span>
+        <p className="eyebrow">{signup ? 'NOVO ACESSO' : 'ACESSO À BARBEARIA'}</p>
+        <h2>{signup ? 'Crie sua conta' : 'Entre na sua conta'}</h2>
+        <p className="login-subtitle">{signup ? 'Cadastre seus dados para preparar seu espaço.' : 'Acesse com seu e-mail e senha. Seu espaço será aberto automaticamente.'}</p>
+        <form onSubmit={submit} className="login-form">
+          {signup && <label>Seu nome<input autoComplete="name" placeholder="Como podemos te chamar?" value={name} onChange={event=>setName(event.target.value)} required/></label>}
+          <label>E-mail<input autoFocus type="email" autoComplete="username" placeholder="voce@barbearia.com" value={email} onChange={event=>setEmail(event.target.value)} required/></label>
+          <label>Senha<span className="password-input"><input type={visible?'text':'password'} autoComplete={signup?'new-password':'current-password'} placeholder={signup?'Mínimo de 8 caracteres':'Digite sua senha'} value={password} onChange={event=>setPassword(event.target.value)} required/><button type="button" onClick={()=>setVisible(value=>!value)}>{visible?'Ocultar':'Mostrar'}</button></span></label>
+          {signup && <label>Confirmar senha<input type={visible?'text':'password'} autoComplete="new-password" placeholder="Digite a senha novamente" value={confirm} onChange={event=>setConfirm(event.target.value)} required/></label>}
+          {error && <p className="login-error">{error}</p>}
+          <button className="login-submit" disabled={loading}>{loading?'Aguarde…':signup?'Criar conta':'Entrar'}<ArrowRight size={16}/></button>
+        </form>
+        <p className="login-switch">{signup?'Já tem uma conta?':'Ainda não tem conta?'} <button type="button" onClick={()=>switchMode(!signup)}>{signup?'Entrar':'Cadastre-se'}</button></p>
+        <div className="login-security"><ShieldCheck size={15}/><span><b>Acesso protegido</b><small>Seu espaço aparece automaticamente após entrar.</small></span></div>
+        <p className="local-auth-note">{cloudEnabled?'Acesso protegido e sincronizado entre dispositivos.':'Acesso salvo apenas neste navegador. Configure Supabase para sincronizar.'}</p>
+      </div>
+      <div className="login-side-foot">© {new Date().getFullYear()} BRAVIO STUDIO <span>•</span> FEITO PARA CUIDAR DE CADA DETALHE</div>
+    </section>
+  </main>;
+}
 function ProfileModal({ profile, setProfile, email, onChangePassword, onSignOut, onClose }) {
   const [name, setName] = useState(profile.name); const [photo, setPhoto] = useState(profile.photo || ''); const [current, setCurrent] = useState(''); const [next, setNext] = useState(''); const [confirm, setConfirm] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false);
   function selectPhoto(e) { const file=e.target.files?.[0]; if(!file)return; if(file.size>2_000_000){setError('A foto precisa ter até 2 MB.');return;} const reader=new FileReader(); reader.onload=()=>{setPhoto(reader.result);setError('');}; reader.readAsDataURL(file); }
@@ -539,17 +594,17 @@ function AppointmentModal({ data, defaults, businessHours, blocks, agendaOpen, o
   return embedded ? formContent : <ModalShell title="Novo atendimento" subtitle="Preencha os detalhes para reservar um horário." onClose={onClose}><CalendarActionTabs active="appointment" onSwitch={onSwitchTab}/>{formContent}</ModalShell>;
 }
 
-function BarberModal({ barber, barbers=[], cloudEnabled=false, onClose, onSave }) {
+function BarberModal({ barber, inviteRetry=false, barbers=[], cloudEnabled=false, onClose, onSave }) {
   const hasAccess=Boolean(cloudEnabled?barber?.accessEmail:barber?.access||barber?.accessEmail);
   const [name,setName]=useState(barber?.name||''); const [role,setRole]=useState(barber?.role||'Barbeiro'); const [color,setColor]=useState(barber?.color||PALETTE[0]); const [photo,setPhoto]=useState(barber?.photo||''); const [commission,setCommission]=useState(barber?.commission==null?'':String(barber.commission)); const [accessEmail,setAccessEmail]=useState(barber?.accessEmail||barber?.access?.email||'');const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [loading,setLoading]=useState(false);
   function fileChange(e) { const file=e.target.files?.[0]; if(!file)return; if(file.size>2_000_000){setError('Escolha uma imagem de até 2 MB.');return;} const reader=new FileReader(); reader.onload=()=>setPhoto(reader.result); reader.readAsDataURL(file); }
-  return <ModalShell title={barber?'Editar barbeiro':'Cadastrar barbeiro'} subtitle={barber?cloudEnabled&&!hasAccess?'Complete o perfil e envie o convite de acesso.':'Atualize o perfil, a comissão e o acesso individual.':cloudEnabled?'Adicione o barbeiro e envie um convite seguro por e-mail.':'Adicione alguém novo ao time e configure o acesso individual.'} onClose={onClose}><form className="modal-form" onSubmit={async e=>{e.preventDefault();setError('');if(!name.trim()){setError('Informe o nome do barbeiro.');return;}if(commission===''||Number(commission)<0||Number(commission)>100){setError('Informe uma comissão entre 0% e 100%.');return;}const email=accessEmail.trim().toLowerCase();if((email||password)&&!email){setError('Informe o e-mail para configurar o acesso.');return;}if(!cloudEnabled&&email&&!hasAccess&&!password){setError('Defina uma senha inicial para este acesso.');return;}if(hasAccess&&!email){setError('Mantenha um e-mail ou configure outra conta antes de salvar.');return;}if(password&&password.length<8){setError('A senha precisa ter pelo menos 8 caracteres.');return;}if(email&&barbers.some(item=>item.id!==barber?.id&&(item.access?.email||item.accessEmail)===email)){setError('Este e-mail já está vinculado a outro barbeiro.');return;}setLoading(true);try{await onSave({id:barber?.id,name:name.trim(),role,color,photo,commission:Number(commission),accessEmail:email,password});}catch(reason){setError(reason?.message||'Não foi possível salvar o barbeiro ou enviar o convite.');}finally{setLoading(false);}}}><div className="photo-upload"><label className="photo-preview" style={{'--avatar':color}}>{photo?<img src={photo} alt="Prévia"/>:initials(name||'Novo barbeiro')}<input type="file" accept="image/*" onChange={fileChange} /></label><div><b>Foto do barbeiro</b><small>JPG ou PNG, até 2 MB</small><label className="upload-link">Escolher imagem<input type="file" accept="image/*" onChange={fileChange}/></label></div></div><label>Nome completo<input autoFocus placeholder="Ex.: Rafael Costa" value={name} onChange={e=>setName(e.target.value)} /></label><label>Função<select value={role} onChange={e=>setRole(e.target.value)}><option>Barbeiro</option><option>Barbeiro sênior</option><option>Barbeiro aprendiz</option><option>Gerente</option></select></label><label>Porcentagem recebida por serviço (%)<input type="number" min="0" max="100" step="0.01" placeholder="Ex.: 50" value={commission} onChange={e=>setCommission(e.target.value)} required/><span className="field-hint">Aplicada ao valor final dos atendimentos concluídos.</span></label><div className="access-form-heading"><LockKeyhole size={14}/><span><b>Acesso do barbeiro</b><small>Ele verá apenas a própria agenda e os próprios valores.</small></span></div><label>E-mail de acesso{!hasAccess&&!cloudEnabled&&<span className="optional">(opcional)</span>}<input type="email" autoComplete="off" placeholder="barbeiro@barbearia.com" value={accessEmail} onChange={e=>setAccessEmail(e.target.value)} required={Boolean(hasAccess||cloudEnabled)}/></label>{!cloudEnabled&&!barber&&<p className="field-hint">No modo local, o acesso usa uma senha inicial. Convites por e-mail exigem Supabase configurado.</p>}{cloudEnabled&&!hasAccess?<p className="field-hint">Enviaremos um convite para este e-mail. O barbeiro cria a própria senha pelo link.</p>:<label>{hasAccess?'Nova senha (opcional)':'Senha inicial (opcional)'}<input type="password" autoComplete="new-password" placeholder={hasAccess?'Deixe em branco para manter':'Mínimo de 8 caracteres'} value={password} onChange={e=>setPassword(e.target.value)}/></label>}<div className="color-picker-label">Cor de identificação</div><div className="color-picker">{PALETTE.map(c=><button type="button" key={c} style={{background:c}} className={color===c?'selected':''} onClick={()=>setColor(c)} aria-label={`Cor ${c}`}>{color===c&&<Check size={14}/>}</button>)}</div>{error&&<p className="form-error">{error}</p>}<div className="modal-footer"><button type="button" className="button button-soft" onClick={onClose}>Cancelar</button><button className="button button-primary" type="submit" disabled={loading}>{loading?'Aguarde…':barber?'Salvar alterações':cloudEnabled?'Salvar e enviar convite':'Cadastrar barbeiro'}</button></div></form></ModalShell>;
+  return <ModalShell title={barber?'Editar barbeiro':'Cadastrar barbeiro'} subtitle={inviteRetry?'O cadastro foi salvo, mas o convite falhou. Confira o erro e tente novamente.':barber?cloudEnabled&&!hasAccess?'Complete o perfil e envie o convite de acesso.':'Atualize o perfil, a comissão e o acesso individual.':cloudEnabled?'Adicione o barbeiro e envie um convite seguro por e-mail.':'Adicione alguém novo ao time e configure o acesso individual.'} onClose={onClose}><form className="modal-form" onSubmit={async e=>{e.preventDefault();setError('');if(!name.trim()){setError('Informe o nome do barbeiro.');return;}if(commission===''||Number(commission)<0||Number(commission)>100){setError('Informe uma comissão entre 0% e 100%.');return;}const email=accessEmail.trim().toLowerCase();if((email||password)&&!email){setError('Informe o e-mail para configurar o acesso.');return;}if(!cloudEnabled&&email&&!hasAccess&&!password){setError('Defina uma senha inicial para este acesso.');return;}if(hasAccess&&!email){setError('Mantenha um e-mail ou configure outra conta antes de salvar.');return;}if(password&&password.length<8){setError('A senha precisa ter pelo menos 8 caracteres.');return;}if(email&&barbers.some(item=>item.id!==barber?.id&&(item.access?.email||item.accessEmail)===email)){setError('Este e-mail já está vinculado a outro barbeiro.');return;}setLoading(true);try{await onSave({id:barber?.id,name:name.trim(),role,color,photo,commission:Number(commission),accessEmail:email,password});}catch(reason){setError(reason?.message||'Não foi possível salvar o barbeiro ou enviar o convite.');}finally{setLoading(false);}}}><div className="photo-upload"><label className="photo-preview" style={{'--avatar':color}}>{photo?<img src={photo} alt="Prévia"/>:initials(name||'Novo barbeiro')}<input type="file" accept="image/*" onChange={fileChange} /></label><div><b>Foto do barbeiro</b><small>JPG ou PNG, até 2 MB</small><label className="upload-link">Escolher imagem<input type="file" accept="image/*" onChange={fileChange}/></label></div></div><label>Nome completo<input autoFocus placeholder="Ex.: Rafael Costa" value={name} onChange={e=>setName(e.target.value)} /></label><label>Função<select value={role} onChange={e=>setRole(e.target.value)}><option>Barbeiro</option><option>Barbeiro sênior</option><option>Barbeiro aprendiz</option><option>Gerente</option></select></label><label>Porcentagem recebida por serviço (%)<input type="number" min="0" max="100" step="0.01" placeholder="Ex.: 50" value={commission} onChange={e=>setCommission(e.target.value)} required/><span className="field-hint">Aplicada ao valor final dos atendimentos concluídos.</span></label><div className="access-form-heading"><LockKeyhole size={14}/><span><b>Acesso do barbeiro</b><small>Ele verá apenas a própria agenda e os próprios valores.</small></span></div><label>E-mail de acesso{!hasAccess&&!cloudEnabled&&<span className="optional">(opcional)</span>}<input type="email" autoComplete="off" placeholder="barbeiro@barbearia.com" value={accessEmail} onChange={e=>setAccessEmail(e.target.value)} required={Boolean(hasAccess||cloudEnabled)}/></label>{!cloudEnabled&&!barber&&<p className="field-hint">No modo local, o acesso usa uma senha inicial. Convites por e-mail exigem Supabase configurado.</p>}{cloudEnabled&&!hasAccess?<p className="field-hint">Enviaremos um convite para este e-mail. O barbeiro cria a própria senha pelo link.</p>:<label>{hasAccess?'Nova senha (opcional)':'Senha inicial (opcional)'}<input type="password" autoComplete="new-password" placeholder={hasAccess?'Deixe em branco para manter':'Mínimo de 8 caracteres'} value={password} onChange={e=>setPassword(e.target.value)}/></label>}<div className="color-picker-label">Cor de identificação</div><div className="color-picker">{PALETTE.map(c=><button type="button" key={c} style={{background:c}} className={color===c?'selected':''} onClick={()=>setColor(c)} aria-label={`Cor ${c}`}>{color===c&&<Check size={14}/>}</button>)}</div>{error&&<p className="form-error">{error}</p>}<div className="modal-footer"><button type="button" className="button button-soft" onClick={onClose}>Cancelar</button><button className="button button-primary" type="submit" disabled={loading}>{loading?'Aguarde…':inviteRetry?'Tentar enviar convite':barber?'Salvar alterações':cloudEnabled?'Salvar e enviar convite':'Cadastrar barbeiro'}</button></div></form></ModalShell>;
 }
 
-function ServiceModal({ onClose, onSave }) {
-  const [name, setName] = useState(''); const [price, setPrice] = useState(''); const [duration, setDuration] = useState('30'); const [error, setError] = useState('');
-  function submit(e) { e.preventDefault(); if (!name.trim()) return setError('Informe o nome do serviço.'); if (!price || Number(price) <= 0) return setError('Informe um preço maior que zero.'); onSave({ name: name.trim(), price: Number(price), duration: Number(duration) }); }
-  return <ModalShell title="Adicionar serviço" subtitle="Inclua uma opção no cardápio da barbearia." onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Nome do serviço<input autoFocus placeholder="Ex.: Corte clássico" value={name} onChange={e=>setName(e.target.value)} /></label><div className="form-two"><label>Preço (R$)<input type="number" min="0.01" step="0.01" placeholder="45,00" value={price} onChange={e=>setPrice(e.target.value)} /></label><label>Duração<select value={duration} onChange={e=>setDuration(e.target.value)}>{[10,15,20,25,30,35,40,45,50,55,60,75,90,120].map(v=><option key={v} value={v}>{v} minutos</option>)}</select></label></div>{error&&<p className="form-error">{error}</p>}<div className="modal-footer"><button type="button" className="button button-soft" onClick={onClose}>Cancelar</button><button className="button button-primary" type="submit"><Plus size={16}/> Salvar serviço</button></div></form></ModalShell>;
+function ServiceModal({ service, onClose, onSave }) {
+  const [name, setName] = useState(service?.name||''); const [price, setPrice] = useState(service?.price==null?'':String(service.price)); const [duration, setDuration] = useState(String(service?.duration||30)); const [error, setError] = useState('');
+  function submit(e) { e.preventDefault(); if (!name.trim()) return setError('Informe o nome do serviço.'); if (!price || Number(price) <= 0) return setError('Informe um preço maior que zero.'); onSave({ id:service?.id, name: name.trim(), price: Number(price), duration: Number(duration) }); }
+  return <ModalShell title={service?'Editar serviço':'Adicionar serviço'} subtitle={service?'Atualize o nome, o preço ou a duração.':'Inclua uma opção no cardápio da barbearia.'} onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Nome do serviço<input autoFocus placeholder="Ex.: Corte clássico" value={name} onChange={e=>setName(e.target.value)} /></label><div className="form-two"><label>Preço (R$)<input type="number" min="0.01" step="0.01" placeholder="45,00" value={price} onChange={e=>setPrice(e.target.value)} /></label><label>Duração<select value={duration} onChange={e=>setDuration(e.target.value)}>{[10,15,20,25,30,35,40,45,50,55,60,75,90,120].map(v=><option key={v} value={v}>{v} minutos</option>)}</select></label></div>{error&&<p className="form-error">{error}</p>}<div className="modal-footer"><button type="button" className="button button-soft" onClick={onClose}>Cancelar</button><button className="button button-primary" type="submit">{service?'Salvar alterações':'Adicionar serviço'}</button></div></form></ModalShell>;
 }
 
 function BlockModal({ barbers, businessHours, defaults={date:todayKey(),time:'12:00',barberId:''}, onSwitchTab, onClose, onSave, embedded=false, onContextChange }) {

@@ -77,7 +77,7 @@ Deno.serve(async (request) => {
     if (accountError) throw accountError;
 
     let userId = existing?.user_id;
-    if (action === 'invite') {
+    if (action === 'invite' || (!userId && !password)) {
       if (existing?.user_id) {
         return Response.json({ error: 'Este barbeiro já tem acesso. Edite o perfil para atualizar os dados de acesso.' }, { status: 409, headers: corsHeaders });
       }
@@ -97,9 +97,6 @@ Deno.serve(async (request) => {
       const { error } = await admin.auth.admin.updateUserById(userId, changes);
       if (error) throw error;
     } else {
-      if (!password) {
-        return Response.json({ error: 'Defina uma senha inicial para o barbeiro.' }, { status: 400, headers: corsHeaders });
-      }
       const { data, error } = await admin.auth.admin.createUser({
         email,
         password,
