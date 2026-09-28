@@ -102,10 +102,10 @@ export function watchBlockRequests(shopId, onChange) {
     .subscribe();
 }
 
-export async function saveCloudBarberAccount({ shopId, barberId, email, password, invite = false }) {
+export async function saveCloudBarberAccount({ shopId, barberId, email, password, invite = false, action }) {
   const { data, error } = await supabase.functions.invoke('manage-barber-account', {
     body: {
-      action: invite ? 'invite' : 'save',
+      action: action || (invite ? 'invite' : 'save'),
       shop_id: shopId,
       barber_id: barberId,
       email,

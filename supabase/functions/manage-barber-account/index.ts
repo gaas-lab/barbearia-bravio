@@ -49,10 +49,10 @@ Deno.serve(async (request) => {
     const barberId = String(body.barber_id ?? '');
     const email = String(body.email ?? '').trim().toLowerCase();
     const password = String(body.password ?? '');
-    if (!shopId || !barberId || !email) {
-      return Response.json({ error: 'Informe a barbearia, o barbeiro e o e-mail.' }, { status: 400, headers: corsHeaders });
+    if (!shopId || !barberId || (action !== 'delete' && !email)) {
+      return Response.json({ error: 'Informe a barbearia e o barbeiro; para salvar, informe também o e-mail.' }, { status: 400, headers: corsHeaders });
     }
-    if (action !== 'invite' && action !== 'save') {
+    if (!['invite', 'save', 'delete'].includes(action)) {
       return Response.json({ error: 'Ação inválida.' }, { status: 400, headers: corsHeaders });
     }
     if (action !== 'invite' && password && password.length < 8) {
@@ -75,6 +75,14 @@ Deno.serve(async (request) => {
       .eq('barber_id', barberId)
       .maybeSingle();
     if (accountError) throw accountError;
+
+    if (action === 'delete') {
+      if (existing?.user_id) {
+        const { error } = await admin.auth.admin.deleteUser(existing.user_id);
+        if (error) throw error;
+      }
+      return Response.json({ ok: true }, { headers: corsHeaders });
+    }
 
     let userId = existing?.user_id;
     if (action === 'invite' || (!userId && !password)) {
