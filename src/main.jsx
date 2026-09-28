@@ -287,6 +287,7 @@ function App() {
       setProfile(p=>({...p,name:name.trim(),email:result.user.email||email}));
       return true;
     }
+    if(auth)return false;
     const salt = newSalt();
     const nextAuth = { email: email.trim().toLowerCase(), salt, hash: await passwordDigest(password, salt) };
     localStorage.setItem(AUTH_STORAGE, JSON.stringify(nextAuth));
@@ -412,7 +413,7 @@ function LoginScreen({ onCreate, onLogin, cloudEnabled=false }) {
     try {
       if (signup) {
         const created = await onCreate({ name, email, password });
-        if (created === false) setError(cloudEnabled ? 'Conta criada. Confirme seu e-mail e depois entre.' : 'Não foi possível criar sua conta. Tente novamente.');
+        if (created === false) setError(cloudEnabled ? 'Conta criada. Confirme seu e-mail e depois entre.' : 'Já existe uma conta master neste navegador. Peça ao administrador para cadastrar seu acesso.');
       } else {
         const signedIn = await onLogin(email, password);
         if (!signedIn) setError('E-mail ou senha incorretos.');

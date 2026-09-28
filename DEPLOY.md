@@ -10,8 +10,10 @@ os pedidos de bloqueio entre dispositivos.
 1. Crie um projeto Supabase e mantenha a chave publishable/anon no frontend.
 2. Copie .env.example para .env.local e preencha a URL e a chave pública.
 3. Instale/execute o Supabase CLI e vincule este diretório ao projeto.
-4. Aplique supabase/migrations/202609270001_barbershop_cloud.sql com
-   supabase db push.
+4. Aplique as migrations com `supabase db push` (incluindo
+   `202609280001_first_manager_only.sql`). Só o primeiro cadastro pode
+   inicializar uma barbearia master; cadastros posteriores não recebem acesso
+   ao painel.
 5. Configure APP_ORIGIN como secret da Edge Function com a origem do app e
    APP_URL com a URL de destino dos convites. Inclua essa URL em Authentication
    > URL Configuration > Redirect URLs. As chaves secret do projeto são
@@ -36,7 +38,8 @@ Production da Vercel e faça um novo deploy depois de salvar as variáveis.
 
 ## Acesso e notificações
 
-- A criação do primeiro usuário master também cria a linha da barbearia.
+- O primeiro cadastro cria a conta master e a linha da barbearia. Cadastros
+  seguintes precisam ser convidados como barbeiros pelo gerente.
 - O gerente cria o perfil do barbeiro pela tela de cadastro. A Edge Function
   envia um convite por e-mail e vincula o usuário ao perfil; ao aceitar, o
   barbeiro define a própria senha e entra na área individual.
