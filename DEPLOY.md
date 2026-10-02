@@ -25,6 +25,52 @@ os pedidos de bloqueio entre dispositivos.
    a própria senha. Cadastre também os domínios locais e de produção como URLs
    de redirecionamento.
 
+## Atendente de agendamento pelo WhatsApp
+
+O agente usa a WhatsApp Business Platform Cloud API da Meta e a Responses API
+da OpenAI. O webhook roda como Edge Function; os tokens ficam apenas nos
+secrets do Supabase. A reserva lê os serviços e a agenda atuais, e uma função
+SQL confirma novamente preço, horário de funcionamento e conflitos antes de
+inserir o atendimento. O atendimento aparece na mesma agenda do app com origem
+`whatsapp`.
+
+1. Aplique as migrations, inclusive `202610020001_whatsapp_booking_agent.sql`,
+e publique com `supabase functions deploy whatsapp-booking-agent`.
+2. No painel do Supabase, copie o UUID da barbearia em `shops.id` para a qual o
+   número será conectado. Neste preparo, cada implantação da função atende uma
+   barbearia e um número de telefone.
+3. Crie/configure um app Meta com WhatsApp Cloud API, registre o número e
+   configure um token de acesso permanente com permissão de envio de mensagens.
+   Em Webhooks, assine o campo `messages` do objeto WhatsApp Business Account.
+4. Gere um token de verificação próprio e configure os secrets abaixo. Use o
+   App Secret do app Meta e o Phone Number ID exibido no painel do WhatsApp:
+
+   ```sh
+   supabase secrets set BRAVIO_SHOP_ID="UUID_DA_BARBEARIA" \
+     WHATSAPP_VERIFY_TOKEN="TOKEN_DE_VERIFICACAO_QUE_VOCE_ESCOLHEU" \
+     WHATSAPP_APP_SECRET="APP_SECRET_META" \
+     WHATSAPP_ACCESS_TOKEN="TOKEN_DE_ACESSO_META" \
+     WHATSAPP_PHONE_NUMBER_ID="PHONE_NUMBER_ID_META" \
+     OPENAI_API_KEY="CHAVE_DA_OPENAI" \
+     OPENAI_MODEL="gpt-5-mini"
+   ```
+
+   `WHATSAPP_GRAPH_VERSION` é opcional; o padrão atual no código é `v23.0`.
+5. Cadastre no painel Meta o callback
+   `https://<PROJECT_REF>.supabase.co/functions/v1/whatsapp-booking-agent` e
+   o mesmo `WHATSAPP_VERIFY_TOKEN`. A verificação GET é respondida pela função;
+   as mensagens POST são autenticadas com a assinatura HMAC enviada pela Meta.
+6. Teste pelo número conectado: pergunte por serviços, escolha uma data, serviço
+   e horário. A função envia um resumo e só cria a reserva depois que o cliente
+   responde com uma confirmação clara (por exemplo, "sim" ou "confirmo"); então
+   confira o atendimento na agenda do app.
+
+O agente só atende mensagens de texto neste primeiro corte. Imagens, áudios,
+cancelamentos, reagendamentos e transferência assistida para uma caixa de
+entrada humana ainda não estão implementados. A OpenAI recebe o texto da
+conversa para gerar respostas; a memória curta fica na tabela privada
+`whatsapp_conversations`. Não exponha nenhuma dessas credenciais no frontend.
+
 A chave secret/service-role ignora RLS e nunca deve ser colocada em .env.local do
 frontend, no Git ou nas variáveis VITE_* da Vercel. A função de contas usa
 essa chave somente no ambiente protegido do Supabase.
