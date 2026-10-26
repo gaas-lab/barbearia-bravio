@@ -9,7 +9,7 @@ const CLEAN_START_VERSION = 'bravio-clean-start-v2';
 const AUTH_STORAGE = 'bravio-master-auth-v1';
 const PROFILE_STORAGE = 'bravio-master-profile-v1';
 const SESSION_STORAGE = 'bravio-master-session-v1';
-const PALETTE = ['#bd8058', '#547c67', '#8b72b5', '#d06d63', '#c5a344', '#54859a'];
+const PALETTE = ['#9c6244', '#657563', '#728392', '#896d61', '#a38656', '#666d7d'];
 const WEEKDAYS = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
 const DEFAULT_HOURS = WEEKDAYS.map((_, day) => ({ day, isOpen: true, open: '08:00', close: '20:00' }));
 const DEFAULT_SERVICES = [
@@ -27,7 +27,7 @@ function withDefaultServices(services = []) {
 const initial = {
   barbers: [],
   services: DEFAULT_SERVICES,
-  appointments: [], withdrawals: [], expenses: [], loyaltyGoal: 10, loyaltyReward: 'Serviço grátis', loyaltyRedemptions: [], businessHours: DEFAULT_HOURS, businessBlocks: [], blockRequests: [], shopName: 'Bravio Studio', shopLogo: '', open: true, accent: '#bd8058', dark: false,
+  appointments: [], withdrawals: [], expenses: [], loyaltyGoal: 10, loyaltyReward: 'Serviço grátis', loyaltyRedemptions: [], businessHours: DEFAULT_HOURS, businessBlocks: [], blockRequests: [], shopName: 'Bravio Studio', shopLogo: '', open: true, accent: '#9c6244', dark: false,
 };
 const money = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(n) || 0);
 const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
