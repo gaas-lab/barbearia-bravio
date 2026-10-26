@@ -9,3 +9,6 @@ additional_redirect_urls = [
 
 [functions.manage-barber-account]
 verify_jwt = false
+
+[functions.whatsapp-booking-agent]
+verify_jwt = false
