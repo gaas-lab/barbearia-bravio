@@ -1,246 +1,145 @@
-# 💈 Barbearia Bravio
+<div align="center">
 
-> Sistema web de gestão para barbearias, desenvolvido para centralizar agenda, serviços, equipe e controle financeiro em uma única plataforma.
+# gaas.lab
+
+### IDEIAS GANHAM FORMA.
+
+**DESIGN × CODE × IDEAS**
+
+Laboratório independente de design, tecnologia e experimentação digital.
+
+<img src="assets/gaas-lab-banner.svg" alt="gaas.lab — design, code, ideas" width="100%">
+
+[O Bravio](#-o-bravio) · [Funcionalidades](#-o-que-o-sistema-oferece) · [Começar](#-começar) · [Deploy](DEPLOY.md) · [Tecnologias](#-tecnologias)
+
+</div>
+
+---
+
+## // O Bravio
+
+O **Barbearia Bravio** é um sistema web de gestão que reúne agenda, serviços, equipe e acompanhamento financeiro em uma plataforma.
+
+O gerente tem uma visão geral da operação; cada barbeiro acessa sua própria área. A aplicação pode funcionar com armazenamento local em um navegador ou sincronizar os dados entre dispositivos usando Supabase.
 
 🌐 **[Acessar aplicação](https://barbearia-bravio.vercel.app/)**
 
----
+## // O que o sistema oferece
 
-## 📌 Sobre o projeto
+### Agenda
 
-O **Barbearia Bravio** é uma aplicação web desenvolvida para digitalizar a operação de uma barbearia, oferecendo uma experiência centralizada para gerenciamento do negócio e acompanhamento da rotina dos barbeiros.
+- Visualização da agenda da barbearia
+- Organização de horários por barbeiro
+- Controle dos atendimentos
+- Gestão individual da agenda de cada profissional
 
-A plataforma foi pensada para reduzir processos manuais e facilitar o controle das principais operações da barbearia, desde o gerenciamento da agenda até o acompanhamento financeiro.
+### Serviços e equipe
 
-O sistema possui diferentes níveis de utilização, permitindo que o gestor tenha uma visão geral da operação enquanto cada barbeiro possui acesso à sua própria área.
+- Cadastro e gerenciamento dos serviços oferecidos
+- Gerenciamento dos barbeiros e de seus acessos
+- Área individual para cada profissional
+- Convite de barbeiros por e-mail com criação de senha pelo próprio usuário
 
----
+### Financeiro
 
-## ✨ Funcionalidades
+- Acompanhamento dos valores gerados pelos atendimentos
+- Organização das informações financeiras da barbearia
 
-### 📅 Agenda
+### Acesso e modo local
 
-* Visualização da agenda da barbearia
-* Organização de horários por barbeiro
-* Controle dos atendimentos
-* Gestão individual da agenda de cada profissional
+- Autenticação por e-mail com Supabase
+- O primeiro cadastro no Supabase inicializa o gerente e a barbearia
+- Cadastros seguintes entram por convite do gerente
+- Modo local para desenvolvimento em um único navegador, sem configurar Supabase
 
-### 💈 Serviços
+## // Tecnologias
 
-* Cadastro de serviços
-* Gerenciamento dos serviços oferecidos
-* Organização das opções disponíveis para atendimento
+| Tecnologia | Uso |
+| --- | --- |
+| React | Interface e componentes |
+| Vite | Desenvolvimento e build |
+| JavaScript | Lógica da aplicação |
+| Supabase Auth | Cadastro, login, convites e sessão |
+| Supabase Postgres, RLS e Realtime | Persistência, permissões e atualização entre dispositivos |
+| Supabase Edge Functions | Criação e gerenciamento de contas de barbeiros |
+| CSS | Layout e estilos |
+| Vercel | Hospedagem e publicação |
 
-### 👥 Equipe
-
-* Gerenciamento dos barbeiros
-* Área individual para cada profissional
-* Controle de acesso dos membros da equipe
-* Convite de novos barbeiros por e-mail
-
-### 💰 Financeiro
-
-* Controle financeiro da operação
-* Acompanhamento dos valores gerados pelos atendimentos
-* Organização das informações financeiras da barbearia
-
-### 🔐 Autenticação
-
-* Sistema de autenticação integrado ao Supabase
-* Gerenciamento de usuários
-* Convite de barbeiros por e-mail
-* Definição de senha através de link de convite
-
-### 💾 Modo local
-
-A aplicação também possui um modo de funcionamento utilizando o armazenamento local do navegador.
-
-Esse modo permite executar o projeto para desenvolvimento sem necessidade de configurar o Supabase, sendo ideal para testes em um único navegador.
-
----
-
-## 🛠️ Tecnologias
-
-| Tecnologia     | Utilização                           |
-| -------------- | ------------------------------------ |
-| **React**      | Construção da interface              |
-| **Vite**       | Ambiente de desenvolvimento e build  |
-| **JavaScript** | Lógica da aplicação                  |
-| **Supabase**   | Autenticação e persistência de dados |
-| **CSS**        | Estilização da interface             |
-| **Vercel**     | Deploy da aplicação                  |
-
----
-
-## 📂 Estrutura do projeto
-
-```text
-barbearia-bravio/
-├── dist/
-├── src/
-├── supabase/
-├── index.html
-├── package.json
-├── package-lock.json
-├── vite.config.js
-├── vercel.json
-├── DEPLOY.md
-└── README.md
-```
-
-### Principais diretórios
-
-**`src/`**
-Código principal da aplicação React.
-
-**`supabase/`**
-Arquivos relacionados à configuração e estrutura do Supabase.
-
-**`dist/`**
-Arquivos gerados durante o processo de build.
-
-**`DEPLOY.md`**
-Documentação específica para configuração e publicação do projeto.
-
----
-
-## 🚀 Instalação
+## // Começar
 
 ### Pré-requisitos
 
-Antes de começar, você precisa ter instalado:
+- Node.js e npm
+- Git
 
-* Node.js
-* npm
-* Git
-
-### Clone o repositório
+### Instalação
 
 ```bash
 git clone https://github.com/gaas-lab/barbearia-bravio.git
-```
-
-Entre na pasta:
-
-```bash
 cd barbearia-bravio
-```
-
-Instale as dependências:
-
-```bash
 npm install
-```
-
-Execute o projeto:
-
-```bash
 npm run dev
 ```
 
-Após iniciar o servidor, acesse o endereço informado pelo Vite no terminal.
+O Vite informa o endereço local no terminal. Sem variáveis do Supabase, a aplicação usa o modo local no navegador.
 
----
+## // Configurar Supabase e publicar
 
-## 🔐 Configuração do Supabase
+Para autenticação, persistência e sincronização entre dispositivos, configure o Supabase. O passo a passo inclui migrations, autenticação, convites, Edge Function, SMTP e variáveis da Vercel:
 
-O projeto pode funcionar sem configuração do Supabase utilizando o armazenamento local do navegador.
+**[Abrir o guia de deploy](DEPLOY.md)**
 
-Para utilizar a aplicação com persistência de dados e autenticação, é necessário configurar as variáveis de ambiente do Supabase.
+Use `.env.example` como referência para criar `.env.local`. No frontend, use somente a chave publicável/anon. Nunca inclua uma chave `service_role` em arquivos `.env` versionados ou variáveis `VITE_*`; ela deve permanecer apenas no ambiente protegido das Edge Functions.
 
-Utilize o arquivo:
-
-```text
-.env.example
-```
-
-como referência.
-
-> ⚠️ Nunca envie arquivos `.env` ou chaves privadas para o GitHub.
-
-A configuração completa de Supabase e Vercel está documentada em:
+## // Estrutura
 
 ```text
-DEPLOY.md
+barbearia-bravio/
+├── src/                     # Aplicação React
+├── supabase/
+│   ├── migrations/          # Estrutura e políticas do banco
+│   └── functions/           # Funções de gerenciamento de contas
+├── index.html
+├── package.json
+├── vite.config.js
+├── vercel.json
+├── DEPLOY.md                # Configuração do Supabase e da Vercel
+└── README.md
 ```
 
----
+## // Dados e acesso
 
-## ☁️ Deploy
+No modo Supabase, o acesso dos barbeiros é limitado ao espaço de trabalho individual e não inclui os dados financeiros dos colegas ou despesas da barbearia. O gerente administra a equipe e acompanha a operação, conforme as permissões configuradas no banco.
 
-A aplicação está preparada para publicação utilizando **Vercel**.
+No modo local, os dados ficam no armazenamento do navegador e não são sincronizados com outros dispositivos. Ao conectar o gerente ao Supabase pela primeira vez, dados locais existentes podem ser importados; confira agenda e lançamentos depois da migração.
 
-O projeto possui configuração própria através do:
+## // Roadmap
 
-```text
-vercel.json
-```
+- [ ] Dashboard com indicadores de desempenho
+- [ ] Relatórios financeiros avançados
+- [ ] Histórico completo de clientes
+- [ ] Notificações automáticas de agendamento
+- [ ] Integração com WhatsApp
+- [ ] Confirmação de horários
+- [ ] Gestão de horários disponíveis
+- [ ] Programa de fidelidade
+- [ ] Relatórios por barbeiro
+- [ ] Melhorias na experiência mobile
+- [ ] PWA instalável
 
-Fluxo básico:
+## // Créditos
 
-```bash
-npm install
-npm run build
-```
+Projeto desenvolvido por **gaas.lab** · [GitHub](https://github.com/gaas-lab).
 
-Depois, o projeto pode ser conectado a um repositório GitHub e publicado através da Vercel.
-
----
-
-## 🎯 Objetivo do projeto
-
-O Bravio foi desenvolvido com foco em três pilares:
-
-**Operação**
-Centralizar a rotina da barbearia em uma única plataforma.
-
-**Gestão**
-Facilitar o acompanhamento da equipe, agenda e resultados financeiros.
-
-**Experiência**
-Criar uma interface simples e objetiva para gestores e barbeiros.
+**Aplicação:** [barbearia-bravio.vercel.app](https://barbearia-bravio.vercel.app/)  
+**Repositório:** [gaas-lab/barbearia-bravio](https://github.com/gaas-lab/barbearia-bravio)
 
 ---
 
-## 🔮 Roadmap
+<div align="center">
 
-Possíveis evoluções do projeto:
+`DESIGN × CODE × IDEAS`
 
-* [ ] Dashboard com indicadores de desempenho
-* [ ] Relatórios financeiros avançados
-* [ ] Histórico completo de clientes
-* [ ] Notificações automáticas de agendamento
-* [ ] Integração com WhatsApp
-* [ ] Sistema de confirmação de horários
-* [ ] Gestão de horários disponíveis
-* [ ] Programa de fidelidade
-* [ ] Relatórios por barbeiro
-* [ ] Melhorias na experiência mobile
-* [ ] PWA para instalação em dispositivos móveis
+<sub>Um projeto gaas.lab. Feito de perguntas, protótipos e commits.</sub>
 
----
-
-## 📱 Aplicação
-
-**Produção:**
-https://barbearia-bravio.vercel.app/
-
-**Repositório:**
-https://github.com/gaas-lab/barbearia-bravio
-
----
-
-## 👨‍💻 Desenvolvimento
-
-Projeto desenvolvido por **gaas.lab**.
-
-> **gaas.lab** — laboratório de experimentação, design e desenvolvimento de produtos digitais.
-
----
-
-## 📄 Licença
-
-Este projeto está disponível para fins de estudo, desenvolvimento e experimentação.
-
-Consulte o arquivo `LICENSE`, caso disponível, para informações sobre os termos de utilização.
-
+</div>
