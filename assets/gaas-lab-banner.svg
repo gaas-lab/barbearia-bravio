@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title desc">
+<title id="title">gaas.lab — Ideias ganham forma</title>
+<desc id="desc">Banner escuro editorial com tipografia off-white e verde ácido.</desc>
+<rect width="1200" height="340" fill="#111315"/>
+<g stroke="#292D2F" stroke-width="1">
+<path d="M0 68H1200 M0 136H1200 M0 204H1200 M0 272H1200"/>
+<path d="M68 0V340 M136 0V340 M204 0V340 M272 0V340 M340 0V340 M408 0V340 M476 0V340 M544 0V340 M612 0V340 M680 0V340 M748 0V340 M816 0V340 M884 0V340 M952 0V340 M1020 0V340 M1088 0V340 M1156 0V340"/>
+</g>
+<rect x="68" y="48" width="10" height="10" fill="#C7FF4D"/>
+<text x="96" y="58" fill="#C7FF4D" font-family="Arial,Helvetica,sans-serif" font-size="15" letter-spacing="4">INDEPENDENT CREATIVE LAB / BR</text>
+<text x="64" y="160" fill="#F4F2EC" font-family="Arial,Helvetica,sans-serif" font-size="82" font-weight="800" letter-spacing="-3">IDEIAS GANHAM</text>
+<text x="64" y="244" fill="#C7FF4D" font-family="Arial,Helvetica,sans-serif" font-size="82" font-weight="800" letter-spacing="-3">FORMA.</text>
+<g transform="translate(914 84)">
+<rect width="218" height="138" fill="none" stroke="#C7FF4D" stroke-width="2"/>
+<path d="M18 20H200 M18 118H200" stroke="#C7FF4D"/>
+<text x="18" y="50" fill="#F4F2EC" font-family="monospace" font-size="15">DESIGN</text>
+<text x="18" y="77" fill="#F4F2EC" font-family="monospace" font-size="15">× CODE</text>
+<text x="18" y="104" fill="#C7FF4D" font-family="monospace" font-size="15">× IDEAS</text>
+</g>
+<text x="68" y="312" fill="#A7ADAF" font-family="monospace" font-size="13" letter-spacing="2">GAAS.LAB / DIGITAL EXPERIMENTS</text>
+<text x="1132" y="312" fill="#A7ADAF" font-family="monospace" font-size="13" text-anchor="end">EST. IN CURIOSITY</text>
+</svg>
