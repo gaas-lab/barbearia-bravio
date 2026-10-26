@@ -113,6 +113,12 @@ No modo Supabase, o acesso dos barbeiros é limitado ao espaço de trabalho indi
 
 No modo local, os dados ficam no armazenamento do navegador e não são sincronizados com outros dispositivos. Ao conectar o gerente ao Supabase pela primeira vez, dados locais existentes podem ser importados; confira agenda e lançamentos depois da migração.
 
+## // Licença e privacidade
+
+O código é distribuído sob a licença **MIT**. Para informações sobre tratamento de dados, consulte o [Aviso de Privacidade](PRIVACIDADE.md). Os [Termos de Uso](TERMOS_DE_USO.md) e o [checklist de revisão legal](REVISAO_LEGAL.md) acompanham o projeto.
+
+Os documentos de privacidade e termos estão em versão de trabalho e precisam de validação operacional e jurídica antes de serem tratados como definitivos.
+
 ## // Roadmap
 
 - [ ] Dashboard com indicadores de desempenho
