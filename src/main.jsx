@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Ban, Bell, BellRing, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, DollarSign, Droplets, Gift, House, ImagePlus, LayoutDashboard, Lightbulb, LockKeyhole, LogOut, Menu, Moon, MoreHorizontal, Package, Pencil, Plus, Scissors, Search, Settings2, ShieldCheck, Sun, Store, TrendingUp, UserRound, UserRoundSearch, Users, Wallet, Wifi, X, XCircle, Trash2, Repeat2 } from 'lucide-react';
 import './styles.css';
-import { cloudEnabled, supabase, getManagerShop, getBarberAccount, getBarberWorkspace, fetchBlockRequests, saveManagerWorkspace, saveCloudBarberAccount, submitCloudBlockRequest, reviewCloudBlockRequest, watchBlockRequests } from './lib/barbershopCloud.js';
+import { cloudEnabled, supabase, getManagerShop, ensureManagerShop, getBarberAccount, getBarberWorkspace, fetchBlockRequests, saveManagerWorkspace, saveCloudBarberAccount, submitCloudBlockRequest, reviewCloudBlockRequest, watchBlockRequests } from './lib/barbershopCloud.js';
 
 const STORAGE = 'barber-studio-v1';
 const CLEAN_START_VERSION = 'bravio-clean-start-v2';
@@ -123,8 +123,18 @@ function App() {
       setSession({role:'barber',barberId:account.barber_id,shopId:account.shop_id,userId:user.id});
       return true;
     }
-    const shop=await getManagerShop(user.id);
-    if(!shop){await supabase.auth.signOut();setSession(null);return false;}
+    let shop=await getManagerShop(user.id);
+    if(!shop){
+      try {
+        await ensureManagerShop();
+        shop=await getManagerShop(user.id);
+      } catch (error) {
+        await supabase.auth.signOut();
+        setSession(null);
+        throw new Error('Seu acesso foi validado, mas a barbearia não estava vinculada à conta. Tentamos recuperar o espaço e não foi possível. Confira se a migration de recuperação de acesso foi aplicada no Supabase.');
+      }
+    }
+    if(!shop){await supabase.auth.signOut();setSession(null);throw new Error('Não encontramos uma barbearia vinculada a este acesso. Peça ao responsável para enviar um convite de barbeiro.');}
     const workspace=shop.data?.barbers?{...shop.data,services:withDefaultServices(shop.data.services)}:readStore();
     const requests=await fetchBlockRequests(shop.id);
     setData({...initial,...workspace,blockRequests:requests});
@@ -341,7 +351,10 @@ function App() {
   async function createMaster({ name, email, password }) {
     if(cloudEnabled){
       const {data:result,error}=await supabase.auth.signUp({email:email.trim().toLowerCase(),password,options:{data:{role:'manager',name:name.trim(),shop_name:'Bravio Studio'}}});
-      if(error)throw error;
+      if(error){
+        if(error.code==='user_already_exists'||error.message?.toLowerCase().includes('already registered'))throw new Error('Este e-mail já tem cadastro. Volte para Entrar e use sua senha.');
+        throw error;
+      }
       if(!result.session)return false;
       await restoreCloudSession(result.user);
       setProfile(p=>({...p,name:name.trim(),email:result.user.email||email}));

@@ -20,6 +20,12 @@ export async function getManagerShop(userId) {
   return data;
 }
 
+export async function ensureManagerShop() {
+  const { data, error } = await supabase.rpc('ensure_manager_shop_for_current_user');
+  if (error) throw error;
+  return data;
+}
+
 export async function saveManagerWorkspace(shopId, workspace) {
   const safe = cloudSafeWorkspace(workspace);
   const { error } = await supabase
